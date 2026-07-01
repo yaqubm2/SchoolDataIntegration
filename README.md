@@ -4,47 +4,103 @@ A service that ingests student data from external School Information Systems
 (SIS) — via a local CSV drop folder or a REST API — and synchronizes it into
 SchoolApp's own student store.
 
+This solution is organized as **Clean Architecture**: dependencies only ever
+point inward (`Api` → `Infrastructure` → `Application` → `Domain`), and
+`Domain`/`Application` know nothing about EF Core, ASP.NET Core, the
+filesystem, HTTP, or SMTP.
+
 ## Solution layout
 
 ```
 SchoolDataIntegration.sln
-src/SchoolDataIntegration.Api/
-  Program.cs                  # DI wiring + the POST /student-imports endpoint. No business logic lives here.
-  Config/
-    AppConfig.cs               # POCO shape of config.xml
-    ConfigLoader.cs             # Loads + caches config.xml
-    config.xml                  # Default XML config (endpoints, credentials, db, mail)
-  Models/                       # Student, DTOs, ImportRecord, ImportSummary, RetrievedData, enums
-  Data/
-    SchoolDbContext.cs          # EF Core (SQLite) context: Students, ImportRecords
-  Retriever/                    # Where the raw bytes come from
-    StudentDataRetriever.cs      # CSV-drop-folder-first, REST-API-fallback orchestration
-    RestApiClient.cs             # HTTP Basic Auth call to the external SIS
-    FilePersister.cs             # Caches REST-sourced data back to CSV for reuse
-  Builder/                      # Turns raw bytes into StudentDto objects
-    CsvParser.cs                 # Small dependency-free CSV parser (quoted fields, escapes)
-    StudentBuilder.cs            # CSV or JSON -> List<StudentDto>
-  Filter/                       # Business rules: de-dup + validation
-    StudentFilter.cs
-  Transformer/                  # Persists to the DB: create-or-update, per-record isolation
-    StudentTransformer.cs
-  Events/                       # In-memory pub/sub
-    StudentImportCompletedEvent.cs
-    InMemoryEventPublisher.cs
-  Mail/                         # Sends the post-import summary email
-    SmtpMailService.cs
-  Processing/
-    Processor.cs                 # Orchestrates: Retrieve -> Build -> Filter -> Transform -> Track -> Publish
+src/
+  SchoolDataIntegration.Domain/          # Innermost layer. Zero package/project references.
+    Entities/
+      StudentRecord.cs                    # Persisted student row (SchoolId + ExternalId is the real identity)
+      ImportRecord.cs                     # Tracks one import run
+    Enums/
+      ImportStatus.cs, DataFormat.cs, DataSourceKind.cs
+    Students/
+      StudentModel.cs                     # A student as it flows through the pipeline, pre-persistence
+    Events/
+      StudentImportCompletedEvent.cs      # Domain event raised when an import finishes
+
+  SchoolDataIntegration.Application/      # Use cases, as abstractions/ports - no concrete implementations.
+    Abstractions/
+      IProcessor.cs                       # THE use case: "import students". Everything else is a port it depends on.
+      IStudentDataRetriever.cs, IFilePersister.cs, IStudentBuilder.cs,
+      IStudentFilter.cs, IStudentTransformer.cs, IEventPublisher.cs,
+      IMailService.cs, IConfigLoader.cs, IRestApiClient.cs
+    Models/
+      StudentImportRequest.cs, ImportSummary.cs, RetrievedData.cs,
+      FilterResult.cs, TransformResult.cs
+    Configuration/
+      AppConfig.cs                        # Shape of config.xml - the contract IConfigLoader returns
+
+  SchoolDataIntegration.Infrastructure/   # Every concrete "processor" lives here. Implements Application's ports.
+    Config/
+      ConfigLoader.cs                     # Reads + caches config.xml via XmlSerializer
+    Data/
+      SchoolDbContext.cs                  # EF Core (SQLite) context: Students, ImportRecords
+    Processing/
+      Processor.cs                        # Orchestrator implementing IProcessor: Retrieve -> Build -> Filter -> Transform -> Track -> Publish
+      Builder/
+        CsvParser.cs, StudentBuilder.cs    # CSV or JSON -> List<StudentModel>
+      Filter/
+        StudentFilter.cs                   # De-dup + validation
+      Transformer/
+        StudentTransformer.cs              # Create-or-update, per-record isolation
+      Retriever/
+        StudentDataRetriever.cs, RestApiClient.cs, FilePersister.cs
+    Events/
+      InMemoryEventPublisher.cs
+    Mail/
+      SmtpMailService.cs
+    DependencyInjection/
+      ServiceCollectionExtensions.cs       # AddSchoolDataIntegrationInfrastructure(...) - one-call DI wiring
+
+  SchoolDataIntegration.Api/              # Composition root. No business logic.
+    Program.cs                            # DI wiring + the POST /student-imports endpoint
+    Config/config.xml                     # Default XML config (endpoints, credentials, db, mail)
+    appsettings.json                      # ASP.NET Core host config only (logging, Kestrel)
+
 tests/SchoolDataIntegration.Tests/
-  Filter/StudentFilterTests.cs
-  Builder/CsvParserTests.cs, StudentBuilderTests.cs
-  Transformer/StudentTransformerTests.cs
-  Processing/ProcessorTests.cs
-  Config/ConfigLoaderTests.cs
+  Infrastructure/Processing/Builder/CsvParserTests.cs, StudentBuilderTests.cs
+  Infrastructure/Processing/Filter/StudentFilterTests.cs
+  Infrastructure/Processing/Transformer/StudentTransformerTests.cs
+  Infrastructure/Processing/ProcessorTests.cs
+  Infrastructure/Config/ConfigLoaderTests.cs
+
 samples/
   123.csv                       # Example local CSV drop file (school id "123")
   inline-import-request.json    # Example POST body exercising dedupe + validation rules
 ```
+
+## Why this split
+
+- **Domain** holds only entities, enums, and the domain event — plain data,
+  no behavior tied to any technology. Nothing else in the codebase can
+  break these types; everything depends on them.
+- **Application** holds the use case (`IProcessor`) and the ports it needs
+  (retriever, builder, filter, transformer, mail, events, config, REST
+  client) plus the DTOs that cross those boundaries. It's pure contracts —
+  if you deleted every class in Infrastructure, Application would still
+  compile.
+- **Infrastructure** is where every "processor" actually lives: the concrete
+  `Processor` orchestrator, `StudentBuilder`, `StudentFilter`,
+  `StudentTransformer`, the `Retriever` classes, `SmtpMailService`,
+  `InMemoryEventPublisher`, `ConfigLoader`, and the EF Core `SchoolDbContext`.
+  This is the only layer allowed to reference EF Core, the filesystem, HTTP,
+  or SMTP, and it's the only layer that implements Application's interfaces.
+- **Api** is a thin composition root: it wires up DI
+  (`AddSchoolDataIntegrationInfrastructure`) and exposes the one HTTP
+  endpoint. It depends on Application (for `IProcessor`/DTOs) and
+  Infrastructure (to register it) but contains no business logic itself.
+
+This means the use case (`Processor`) can be swapped, tested, or reasoned
+about entirely through `IProcessor`, `IStudentDataRetriever`, etc. — you
+never need to know it's backed by SQLite, an SMTP server, or the filesystem
+to understand *what* it does, only *that* it does it.
 
 ## Important design decision & assumption (please read)
 
@@ -56,8 +112,9 @@ samples/
 > (HTTP Basic Auth) as a fallback. Data pulled from the REST API is cached
 > back to the CSV drop folder so a re-run can hit the fast local path.
 
-This is implemented in `Processor.RetrieveAndBuildAsync`. If you intended
-something different (e.g. the body should always be ignored in favor of the
+This is implemented in `Processor.RetrieveAndBuildAsync`
+(`Infrastructure/Processing/Processor.cs`). If you intended something
+different (e.g. the body should always be ignored in favor of the
 Retriever, or the Retriever logic belongs on a separate endpoint/scheduled
 job entirely), it's an easy change — the branch point is in one place.
 
@@ -85,15 +142,17 @@ job entirely), it's an easy change — the branch point is in one place.
   records" rule) — they're reported separately as `duplicates` in the
   summary so nothing is silently lost from the math (`total = success +
   failed + duplicates`).
-- **No external CSV/JSON packages.** `CsvParser` is a small, dependency-free,
-   parser (quoted fields, embedded commas, escaped quotes). JSON
-  uses `System.Text.Json`, built into .NET. This keeps the solution buildable
-  without any extra NuGet surface area for something this scope.
+- **No external CSV/JSON packages.** `CsvParser` is a small, dependency-free
+  parser (quoted fields, embedded commas, escaped quotes). JSON
+  uses `System.Text.Json`, built into .NET.
 - **XML config, separate from host config.** `Config/config.xml` holds the
   business/integration settings the spec calls for (endpoints, Basic Auth
   credentials, DB connection string, mail settings). `appsettings.json` is
   left for ASP.NET Core's own host concerns (logging, Kestrel) rather than
-  overloading it with business config.
+  overloading it with business config. The *shape* of that config
+  (`AppConfig`) lives in Application (it's the `IConfigLoader` contract);
+  the *technical detail* of reading XML from disk lives in
+  Infrastructure's `ConfigLoader`.
 - **SQLite via `EnsureCreated()`, not migrations.** Kept deliberately simple
   for this exercise — `Program.cs` calls `EnsureCreated()` on startup rather
   than requiring `dotnet ef database update`. A production rollout would use
@@ -106,7 +165,8 @@ job entirely), it's an easy change — the branch point is in one place.
   in-process transport; `InMemoryEventPublisher` is the concrete choice made
   here, but nothing else in the codebase depends on events being in-process,
   so swapping in an SQS/RabbitMQ/Azure Service Bus-backed implementation is a
-  drop-in replacement.
+  drop-in replacement in Infrastructure only — Application and Api are
+  untouched.
 - **`YearLevel` is a string**, not an int — different SIS vendors express it
   differently ("10", "Year 10", "Grade 5", "K"). Normalizing it is a
   reporting-layer concern, not an ingestion-layer one.
