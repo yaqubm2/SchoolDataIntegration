@@ -1,0 +1,5 @@
+ExternalId,FirstName,LastName,YearLevel,Status
+EXT-001,Ada,Lovelace,10,Active
+EXT-002,Alan,Turing,11,Active
+EXT-003,Grace,Hopper,9,Active
+EXT-004,"Katherine, Dr.",Johnson,12,Graduated
