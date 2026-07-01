@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SchoolDataIntegrationConfig>
+
+  <!-- Folder checked first for a per-school CSV drop, e.g. D:\Temp\school\123.csv -->
+  <LocalCsvDropFolder>D:\Temp\school</LocalCsvDropFolder>
+
+  <RestApi>
+    <!-- Called as {BaseUrl}/{schoolId}/students when no local CSV is found -->
+    <BaseUrl>https://sis.example-school.local/api</BaseUrl>
+    <Username>sis-integration-user</Username>
+    <Password>change-me</Password>
+    <TimeoutSeconds>30</TimeoutSeconds>
+  </RestApi>
+
+  <Database>
+    <ConnectionString>Data Source=schoolapp.db</ConnectionString>
+  </Database>
+
+  <Mail>
+    <SmtpHost>smtp.example-school.local</SmtpHost>
+    <SmtpPort>587</SmtpPort>
+    <FromAddress>noreply@schoolapp.local</FromAddress>
+    <ToAddress>ops-team@schoolapp.local</ToAddress>
+    <EnableSsl>true</EnableSsl>
+    <!-- true = log the email instead of sending it (safe default for dev/test) -->
+    <DryRun>true</DryRun>
+  </Mail>
+
+</SchoolDataIntegrationConfig>

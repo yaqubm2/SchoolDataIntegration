@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SchoolDataIntegration.Application</RootNamespace>
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!--
+    Application layer: the use cases (as abstractions/ports) plus the
+    request/response models they speak. Depends only on Domain. Contains
+    NO concrete implementations - those are all "processors" and live in
+    Infrastructure, which implements these interfaces.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\SchoolDataIntegration.Domain\SchoolDataIntegration.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

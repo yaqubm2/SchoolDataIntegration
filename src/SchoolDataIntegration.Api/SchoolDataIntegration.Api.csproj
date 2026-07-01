@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<RootNamespace>SchoolDataIntegration.Api</RootNamespace>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<RollForward>LatestMajor</RollForward>
+	</PropertyGroup>
+
+  <!--
+    Api layer: the composition root. Wires up DI (delegating the heavy
+    lifting to Infrastructure's AddSchoolDataIntegrationInfrastructure) and
+    exposes the HTTP endpoint. Knows about both Application (for the request/
+    response models and IProcessor) and Infrastructure (to register it).
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\SchoolDataIntegration.Application\SchoolDataIntegration.Application.csproj" />
+    <ProjectReference Include="..\SchoolDataIntegration.Infrastructure\SchoolDataIntegration.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ship the default XML config and any seed folders next to the built app -->
+    <None Update="Config\config.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

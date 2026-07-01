@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SchoolDataIntegration.Domain</RootNamespace>
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!--
+    Domain layer: entities, enums and domain events only.
+    Deliberately has ZERO PackageReferences and ZERO ProjectReferences -
+    nothing in here is allowed to depend on EF Core, ASP.NET Core, or any
+    other layer. Everything else in the solution depends on this project,
+    never the other way round.
+  -->
+
+</Project>

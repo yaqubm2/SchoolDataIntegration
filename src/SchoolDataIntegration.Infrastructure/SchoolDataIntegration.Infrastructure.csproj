@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SchoolDataIntegration.Infrastructure</RootNamespace>
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!--
+    Infrastructure layer: every concrete "processor" (Builder, Filter,
+    Transformer, Retriever, Mail, Events, Config, Data/EF Core) plus the
+    Processor orchestrator itself, which implements Application's IProcessor
+    use-case interface. This is the only layer allowed to know about EF
+    Core, the filesystem, SMTP, or HTTP.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SchoolDataIntegration.Domain\SchoolDataIntegration.Domain.csproj" />
+    <ProjectReference Include="..\SchoolDataIntegration.Application\SchoolDataIntegration.Application.csproj" />
+  </ItemGroup>
+
+</Project>
