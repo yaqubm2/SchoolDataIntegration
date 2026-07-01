@@ -1,9 +1,0 @@
-{
-  "schoolId": "456",
-  "students": [
-    { "externalId": "EXT-101", "firstName": "Marie", "lastName": "Curie", "yearLevel": "11", "status": "Active" },
-    { "externalId": "EXT-102", "firstName": "Nikola", "lastName": "Tesla", "yearLevel": "10", "status": "Active" },
-    { "externalId": "EXT-101", "firstName": "Marie", "lastName": "Curie (duplicate)", "yearLevel": "11", "status": "Active" },
-    { "externalId": "", "firstName": "Missing", "lastName": "Id", "yearLevel": "9", "status": "Active" }
-  ]
-}
